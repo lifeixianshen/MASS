@@ -153,20 +153,26 @@ class XTransformerModel(BaseFairseqModel):
         self.tgt_key = tgt_key
         return decoder_out
 
-    def add_args(parser):
-        TransformerModel.add_args(parser)
-        parser.add_argument('--share-encoders', action='store_true',
-                            help='share encoders across languages')
-        parser.add_argument('--share-decoders', action='store_true',
-                            help='share decoders across languages')
+    def add_args(self):
+        TransformerModel.add_args(self)
+        self.add_argument(
+            '--share-encoders',
+            action='store_true',
+            help='share encoders across languages',
+        )
+        self.add_argument(
+            '--share-decoders',
+            action='store_true',
+            help='share decoders across languages',
+        )
 
     @classmethod
     def build_model(cls, args, task):
-        langs = [lang for lang in args.langs]
+        langs = list(args.langs)
 
         embed_tokens = {}
         for lang in langs:
-            if len(embed_tokens) == 0 or args.share_all_embeddings is False:
+            if not embed_tokens or args.share_all_embeddings is False:
                 embed_token = build_embedding(
                     task.dicts[lang], args.encoder_embed_dim, args.encoder_embed_path        
                 )

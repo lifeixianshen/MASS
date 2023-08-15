@@ -64,7 +64,7 @@ def load_binarized(path, params):
             assert params.split_data is False
             path = split_path
     assert os.path.isfile(path), path
-    logger.info("Loading data from %s ..." % path)
+    logger.info(f"Loading data from {path} ...")
     data = torch.load(path)
     data = process_binarized(data, params)
     return data
@@ -110,7 +110,7 @@ def load_mono_data(params, data):
 
     for lang in params.mono_dataset.keys():
 
-        logger.info('============ Monolingual data (%s)' % lang)
+        logger.info(f'============ Monolingual data ({lang})')
 
         assert lang in params.langs and lang not in data['mono']
         data['mono'][lang] = {}
@@ -172,7 +172,7 @@ def load_para_data(params, data):
 
     for src, tgt in params.para_dataset.keys():
 
-        logger.info('============ Parallel data (%s-%s)' % (src, tgt))
+        logger.info(f'============ Parallel data ({src}-{tgt})')
 
         assert (src, tgt) not in data['para']
         data['para'][(src, tgt)] = {}
@@ -233,8 +233,8 @@ def load_back_data(params, data):
 
     for src, tgt in params.back_dataset.keys():
 
-        logger.info('============ Back Parallel data (%s-%s)' % (src, tgt))
-        
+        logger.info(f'============ Back Parallel data ({src}-{tgt})')
+
         assert (src, tgt) not in data['back']
         data['back'][(src, tgt)] = {}
 
@@ -243,7 +243,7 @@ def load_back_data(params, data):
 
         src_data = load_binarized(src_path, params)
         tgt_data = load_binarized(tgt_path, params)
-        
+
         set_dico_parameters(params, data, src_data['dico'])
         set_dico_parameters(params, data, tgt_data['dico'])
 
@@ -261,7 +261,7 @@ def load_back_data(params, data):
             a = n_sent * params.local_rank
             b = n_sent * params.local_rank + n_sent
             dataset.select_data(a, b)
-        
+
         data['back'][(src, tgt)] = dataset
         logger.info("")
 
@@ -277,93 +277,126 @@ def check_data_params(params):
     params.langs = params.lgs.split('-') if params.lgs != 'debug' else ['en']
     assert len(params.langs) == len(set(params.langs)) >= 1
     # assert sorted(params.langs) == params.langs
-    params.id2lang = {k: v for k, v in enumerate(sorted(params.langs))}
+    params.id2lang = dict(enumerate(sorted(params.langs)))
     params.lang2id = {k: v for v, k in params.id2lang.items()}
     params.n_langs = len(params.langs)
 
     # CLM steps
     clm_steps = [s.split('-') for s in params.clm_steps.split(',') if len(s) > 0]
     params.clm_steps = [(s[0], None) if len(s) == 1 else tuple(s) for s in clm_steps]
-    assert all([(l1 in params.langs) and (l2 in params.langs or l2 is None) for l1, l2 in params.clm_steps])
+    assert all(
+        (l1 in params.langs) and (l2 in params.langs or l2 is None)
+        for l1, l2 in params.clm_steps
+    )
     assert len(params.clm_steps) == len(set(params.clm_steps))
 
     # MLM / TLM steps
     mlm_steps = [s.split('-') for s in params.mlm_steps.split(',') if len(s) > 0]
     params.mlm_steps = [(s[0], None) if len(s) == 1 else tuple(s) for s in mlm_steps]
-    assert all([(l1 in params.langs) and (l2 in params.langs or l2 is None) for l1, l2 in params.mlm_steps])
+    assert all(
+        (l1 in params.langs) and (l2 in params.langs or l2 is None)
+        for l1, l2 in params.mlm_steps
+    )
     assert len(params.mlm_steps) == len(set(params.mlm_steps))
 
     # parallel classification steps
     params.pc_steps = [tuple(s.split('-')) for s in params.pc_steps.split(',') if len(s) > 0]
-    assert all([len(x) == 2 for x in params.pc_steps])
-    assert all([l1 in params.langs and l2 in params.langs for l1, l2 in params.pc_steps])
-    assert all([l1 != l2 for l1, l2 in params.pc_steps])
+    assert all(len(x) == 2 for x in params.pc_steps)
+    assert all(
+        l1 in params.langs and l2 in params.langs for l1, l2 in params.pc_steps
+    )
+    assert all(l1 != l2 for l1, l2 in params.pc_steps)
     assert len(params.pc_steps) == len(set(params.pc_steps))
 
     # machine translation steps
     params.mt_steps = [tuple(s.split('-')) for s in params.mt_steps.split(',') if len(s) > 0]
-    assert all([len(x) == 2 for x in params.mt_steps])
-    assert all([l1 in params.langs and l2 in params.langs for l1, l2 in params.mt_steps])
-    assert all([l1 != l2 for l1, l2 in params.mt_steps])
+    assert all(len(x) == 2 for x in params.mt_steps)
+    assert all(
+        l1 in params.langs and l2 in params.langs for l1, l2 in params.mt_steps
+    )
+    assert all(l1 != l2 for l1, l2 in params.mt_steps)
     assert len(params.mt_steps) == len(set(params.mt_steps))
-    assert len(params.mt_steps) == 0 or not params.encoder_only
+    assert not params.mt_steps or not params.encoder_only
 
     # back machine translation steps 
     params.bmt_steps = [tuple(s.split('-')) for s in params.bmt_steps.split(',') if len(s) > 0]
 
     # denoising auto-encoder steps
     params.ae_steps = [s for s in params.ae_steps.split(',') if len(s) > 0]
-    assert all([lang in params.langs for lang in params.ae_steps])
+    assert all(lang in params.langs for lang in params.ae_steps)
     assert len(params.ae_steps) == len(set(params.ae_steps))
-    assert len(params.ae_steps) == 0 or not params.encoder_only
-    
+    assert not params.ae_steps or not params.encoder_only
+
     # mass steps
     params.mass_steps = [s for s in params.mass_steps.split(',') if len(s) > 0]
     mass_steps = []
     for src in params.mass_steps:
-        for tgt in params.mass_steps:
-            if src != tgt:
-                mass_steps.append(tuple([src, tgt]))
-
+        mass_steps.extend((src, tgt) for tgt in params.mass_steps if src != tgt)
     # back-translation steps
     params.bt_steps = [tuple(s.split('-')) for s in params.bt_steps.split(',') if len(s) > 0]
-    assert all([len(x) == 3 for x in params.bt_steps])
-    assert all([l1 in params.langs and l2 in params.langs and l3 in params.langs for l1, l2, l3 in params.bt_steps])
-    assert all([l1 == l3 and l1 != l2 for l1, l2, l3 in params.bt_steps])
+    assert all(len(x) == 3 for x in params.bt_steps)
+    assert all(
+        l1 in params.langs and l2 in params.langs and l3 in params.langs
+        for l1, l2, l3 in params.bt_steps
+    )
+    assert all(l1 == l3 and l1 != l2 for l1, l2, l3 in params.bt_steps)
     assert len(params.bt_steps) == len(set(params.bt_steps))
-    assert len(params.bt_steps) == 0 or not params.encoder_only
+    assert not params.bt_steps or not params.encoder_only
     params.bt_src_langs = [l1 for l1, _, _ in params.bt_steps]
 
     # check monolingual datasets
     required_mono = set([l1 for l1, l2 in (params.mlm_steps + params.clm_steps) if l2 is None] + params.ae_steps + params.bt_src_langs + params.mass_steps)
     params.mono_dataset = {
         lang: {
-            splt: os.path.join(params.data_path, '%s.%s.pth' % (splt, lang))
+            splt: os.path.join(params.data_path, f'{splt}.{lang}.pth')
             for splt in ['train', 'valid', 'test']
-        } for lang in params.langs if lang in required_mono
+        }
+        for lang in params.langs
+        if lang in required_mono
     }
-    assert all([all([os.path.isfile(p) for p in paths.values()]) for paths in params.mono_dataset.values()])
+    assert all(
+        all(os.path.isfile(p) for p in paths.values())
+        for paths in params.mono_dataset.values()
+    )
 
     # check parallel datasets
     required_para_train = set(params.clm_steps + params.mlm_steps + params.pc_steps + params.mt_steps)
     required_para = required_para_train | set([(l2, l3) for _, l2, l3 in params.bt_steps] + mass_steps)
     params.para_dataset = {
         (src, tgt): {
-            splt: (os.path.join(params.data_path, '%s.%s-%s.%s.pth' % (splt, src, tgt, src)),
-                   os.path.join(params.data_path, '%s.%s-%s.%s.pth' % (splt, src, tgt, tgt)))
+            splt: (
+                os.path.join(
+                    params.data_path, f'{splt}.{src}-{tgt}.{src}.pth'
+                ),
+                os.path.join(
+                    params.data_path, f'{splt}.{src}-{tgt}.{tgt}.pth'
+                ),
+            )
             for splt in ['train', 'valid', 'test']
-            if splt != 'train' or (src, tgt) in required_para_train or (tgt, src) in required_para_train
-        } for src in params.langs for tgt in params.langs
-        if src < tgt and ((src, tgt) in required_para or (tgt, src) in required_para)
+            if splt != 'train'
+            or (src, tgt) in required_para_train
+            or (tgt, src) in required_para_train
+        }
+        for src in params.langs
+        for tgt in params.langs
+        if src < tgt
+        and ((src, tgt) in required_para or (tgt, src) in required_para)
     }
-    assert all([all([os.path.isfile(p1) and os.path.isfile(p2) for p1, p2 in paths.values()]) for paths in params.para_dataset.values()])
-    
+    assert all(
+        all(
+            os.path.isfile(p1) and os.path.isfile(p2)
+            for p1, p2 in paths.values()
+        )
+        for paths in params.para_dataset.values()
+    )
+
     # back parallel datasets
     params.back_dataset = {
         (src, tgt): (
-            os.path.join(params.data_path, '%s-%s.%s.pth' % (src, tgt, src)),
-            os.path.join(params.data_path, '%s-%s.%s.pth' % (src, tgt, tgt))
-        ) for (src, tgt) in params.bmt_steps        
+            os.path.join(params.data_path, f'{src}-{tgt}.{src}.pth'),
+            os.path.join(params.data_path, f'{src}-{tgt}.{tgt}.pth'),
+        )
+        for (src, tgt) in params.bmt_steps
     }
 
     # check that we can evaluate on BLEU
@@ -385,7 +418,7 @@ def load_data(params):
 
     # parallel datasets
     load_para_data(params, data)
-    
+
     # back translation datasets
     load_back_data(params, data)
 
@@ -398,7 +431,11 @@ def load_data(params):
     # parallel data summary
     for (src, tgt), v in data['para'].items():
         for data_set in v.keys():
-            logger.info('{: <18} - {: >5} - {: >12}:{: >10}'.format('Parallel data', data_set, '%s-%s' % (src, tgt), len(v[data_set])))
+            logger.info(
+                '{: <18} - {: >5} - {: >12}:{: >10}'.format(
+                    'Parallel data', data_set, f'{src}-{tgt}', len(v[data_set])
+                )
+            )
 
     logger.info("")
     return data

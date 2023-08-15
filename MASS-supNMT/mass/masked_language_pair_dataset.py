@@ -46,22 +46,19 @@ class MaskedLanguagePairDataset(FairseqDataset):
         else:
             src_item = self.src[index]
             src_list = [self.vocab.eos_index] + src_item.tolist()
-     
+
             start, length = self.mask_interval(len(src_list))
             output = src_list[start     : start + length].copy()
             _target = src_list[start - 1 : start + length - 1].copy()
-            
-            target = []
-            for w in _target:
-                target.append(self.random_word(w, self.pred_probs))
 
+            target = [self.random_word(w, self.pred_probs) for w in _target]
             source = []
             for i, w in enumerate(src_list[1:]): # to keep consistent with finetune
                 if i >= start and i <= start + length:
                     w = self.mask_word(w)
                 if w is not None:
                     source.append(w)
-        
+
         assert len(target) == len(output)
         return {
             'id': index,
@@ -125,7 +122,7 @@ class MaskedLanguagePairDataset(FairseqDataset):
         max_positions, 
         tgt_len=128
     ):
-        if isinstance(max_positions, float) or isinstance(max_positions, int):
+        if isinstance(max_positions, (float, int)):
             tgt_len = min(tgt_len, max_positions)
         source = self.vocab.dummy_sentence(tgt_len)
         target = self.vocab.dummy_sentence(tgt_len)

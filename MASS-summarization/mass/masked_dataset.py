@@ -46,13 +46,13 @@ class MaskedLanguagePairDataset(LanguagePairDataset):
         pkgs = {'id': index}
         tgt_item = self.tgt[index] if self.tgt is not None else None
         src_item = self.src[index]
-        
+
         positions = np.arange(0, len(self.src[index]))
         masked_pos = []
         for i in range(1, len(src_item), self.block_size):
             block = positions[i: i + self.block_size]
             masked_len = int(len(block) * self.mask_prob)
-            masked_block_start = np.random.choice(block[:-int(masked_len) + 1], 1)[0]
+            masked_block_start = np.random.choice(block[:-masked_len + 1], 1)[0]
             masked_pos.extend(positions[masked_block_start : masked_block_start + masked_len])
         masked_pos = np.array(masked_pos)
 
@@ -106,7 +106,8 @@ class MaskedLanguagePairDataset(LanguagePairDataset):
         _x_rand = _x_real.clone().random_(self.src_dict.nspecial, len(self.src_dict))
         _x_mask = _x_real.clone().fill_(self.src_dict.index('[MASK]'))
         probs = torch.multinomial(self.pred_probs, len(x), replacement=True)
-        _x = _x_mask * (probs == 0).long() + \
-             _x_real * (probs == 1).long() + \
-             _x_rand * (probs == 2).long()
-        return _x
+        return (
+            _x_mask * (probs == 0).long()
+            + _x_real * (probs == 1).long()
+            + _x_rand * (probs == 2).long()
+        )

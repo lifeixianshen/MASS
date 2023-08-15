@@ -30,13 +30,13 @@ from .noisy_language_pair_dataset import NoisyLanguagePairDataset
 
 
 def _get_mass_dataset_key(lang_pair):
-    return "mass:" + lang_pair
+    return f"mass:{lang_pair}"
 
 def _get_mt_dataset_key(lang_pair):
-    return "" + lang_pair
+    return f"{lang_pair}"
 
 def _get_memt_dataset_key(lang_pair):
-    return "memt:" + lang_pair
+    return f"memt:{lang_pair}"
 
 
 @register_task('xmasked_seq2seq')
@@ -117,7 +117,7 @@ class XMassTranslationTask(FairseqTask):
         s = args.word_mask_keep_rand.split(',')
         s = [float(x) for x in s]
         setattr(args, 'pred_probs', torch.FloatTensor([s[0], s[1], s[2]]))
-        
+
         args.langs = sorted(args.langs.split(','))
         args.source_langs = sorted(args.source_langs.split(','))
         args.target_langs = sorted(args.target_langs.split(','))
@@ -126,7 +126,7 @@ class XMassTranslationTask(FairseqTask):
             assert lang in args.langs
         for lang in args.target_langs:
             assert lang in args.langs
-        
+
         args.mass_steps = [s for s in args.mass_steps.split(',') if len(s) > 0]
         args.mt_steps   = [s for s in args.mt_steps.split(',')   if len(s) > 0]
         args.memt_steps = [s for s in args.memt_steps.split(',') if len(s) > 0]
@@ -136,17 +136,17 @@ class XMassTranslationTask(FairseqTask):
             for lang_pair in args.mass_steps
             if len(lang_pair) > 0
         ]
-        
-        mono_lang_pairs = []
-        for lang in mono_langs:
-            mono_lang_pairs.append('{}-{}'.format(lang, lang))
+
+        mono_lang_pairs = [f'{lang}-{lang}' for lang in mono_langs]
         setattr(args, 'mono_lang_pairs', mono_lang_pairs)
 
-        args.para_lang_pairs = list(set([
-            '-'.join(sorted(lang_pair.split('-')))
-            for lang_pair in set(args.mt_steps + args.memt_steps) if 
-            len(lang_pair) > 0
-        ]))
+        args.para_lang_pairs = list(
+            {
+                '-'.join(sorted(lang_pair.split('-')))
+                for lang_pair in set(args.mt_steps + args.memt_steps)
+                if len(lang_pair) > 0
+            }
+        )
 
         args.valid_lang_pairs = [s for s in args.valid_lang_pairs.split(',') if len(s) > 0]
 
@@ -178,27 +178,29 @@ class XMassTranslationTask(FairseqTask):
 
         # If provide source_lang and target_lang, we will switch to translation
         if args.source_lang is not None and args.target_lang is not None:
-            setattr(args, 'eval_lang_pair', '{}-{}'.format(args.source_lang, args.target_lang))
+            setattr(args, 'eval_lang_pair', f'{args.source_lang}-{args.target_lang}')
             training = False
         else:
-            if len(args.para_lang_pairs) > 0:
-                required_para = [s for s in set(args.mt_steps + args.memt_steps)]
+            if args.para_lang_pairs:
+                required_para = list(set(args.mt_steps + args.memt_steps))
                 setattr(args, 'eval_lang_pair', required_para[0])
             else:
                 setattr(args, 'eval_lang_pair', args.mono_lang_pairs[0])
             training = True
         setattr(args, 'n_lang', len(langs_id))
-        setattr(args, 'eval_para', True if len(args.para_lang_pairs) > 0 else False)
+        setattr(args, 'eval_para', len(args.para_lang_pairs) > 0)
 
         dicts = OrderedDict()
         for lang in args.langs:
-            dicts[lang] = MaskedLMDictionary.load(os.path.join(args.data, 'dict.{}.txt'.format(lang)))
+            dicts[lang] = MaskedLMDictionary.load(
+                os.path.join(args.data, f'dict.{lang}.txt')
+            )
             if len(dicts) > 0:
                 assert dicts[lang].pad() == dicts[args.langs[0]].pad()
                 assert dicts[lang].eos() == dicts[args.langs[0]].eos()
                 assert dicts[lang].unk() == dicts[args.langs[0]].unk()
                 assert dicts[lang].mask() == dicts[args.langs[0]].mask()
-            print('| [{}] dictionary: {} types'.format(lang, len(dicts[lang])))
+            print(f'| [{lang}] dictionary: {len(dicts[lang])} types')
         return dicts, training
 
     def load_dataset(self, split, **kwargs):

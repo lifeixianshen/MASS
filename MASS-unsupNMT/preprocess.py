@@ -14,6 +14,7 @@ Example: python data/vocab.txt data/train.txt
 vocab.txt: 1stline=word, 2ndline=count
 """
 
+
 import os
 import sys
 
@@ -27,7 +28,7 @@ if __name__ == '__main__':
 
     voc_path = sys.argv[1]
     txt_path = sys.argv[2]
-    bin_path = sys.argv[2] + '.pth'
+    bin_path = f'{sys.argv[2]}.pth'
     assert os.path.isfile(voc_path)
     assert os.path.isfile(txt_path)
 

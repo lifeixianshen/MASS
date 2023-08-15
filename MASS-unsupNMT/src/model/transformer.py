@@ -28,11 +28,7 @@ def Embedding(num_embeddings, embedding_dim, padding_idx=None):
 
 
 def Linear(in_features, out_features, bias=True):
-    m = nn.Linear(in_features, out_features, bias)
-    # nn.init.normal_(m.weight, mean=0, std=1)
-    # nn.init.xavier_uniform_(m.weight)
-    # nn.init.constant_(m.bias, 0.)
-    return m
+    return nn.Linear(in_features, out_features, bias)
 
 
 def create_sinusoidal_embeddings(n_pos, dim, out):
@@ -144,7 +140,7 @@ class MultiHeadAttention(nn.Module):
             self.out_lin = Linear(dim, dim)
         else:
             self.out_lin = nn.ModuleList()
-            for i in range(n_langs):
+            for _ in range(n_langs):
                 self.out_lin.append(Linear(dim, dim))
 
     def forward(self, input, mask, kv=None, cache=None, segment_label=None):
@@ -158,7 +154,9 @@ class MultiHeadAttention(nn.Module):
             klen = qlen if cache is None else cache['slen'] + qlen
         else:
             klen = kv.size(1)
-        assert dim == self.dim, 'Dimensions do not match: %s input vs %s configured' % (dim, self.dim)
+        assert (
+            dim == self.dim
+        ), f'Dimensions do not match: {dim} input vs {self.dim} configured'
         n_heads = self.n_heads
         dim_per_head = dim // n_heads
         mask_reshape = (bs, 1, qlen, klen) if mask.dim() == 3 else (bs, 1, 1, klen)
@@ -199,7 +197,7 @@ class MultiHeadAttention(nn.Module):
         weights = F.dropout(weights, p=self.dropout, training=self.training)  # (bs, n_heads, qlen, klen)
         context = torch.matmul(weights, v)                                    # (bs, n_heads, qlen, dim_per_head)
         context = unshape(context)                                            # (bs, qlen, dim)
-        
+
         if self.n_langs is None:
             return self.out_lin(context)
         else:
@@ -289,10 +287,18 @@ class TransformerModel(nn.Module):
                 elif self.attention_setting == "v1":
                     self.encoder_attn.append(MultiHeadAttention(self.n_heads, self.dim, dropout=self.attention_dropout, n_langs=self.n_langs))
                 else:
-                    self.encoder_attn.append(nn.ModuleList([
-                        MultiHeadAttention(self.n_heads, self.dim, dropout=self.attention_dropout)
-                        for i in range(self.n_langs)    
-                    ]))
+                    self.encoder_attn.append(
+                        nn.ModuleList(
+                            [
+                                MultiHeadAttention(
+                                    self.n_heads,
+                                    self.dim,
+                                    dropout=self.attention_dropout,
+                                )
+                                for _ in range(self.n_langs)
+                            ]
+                        )
+                    )
             self.ffns.append(TransformerFFN(self.dim, self.hidden_dim, self.dim, dropout=self.dropout, gelu_activation=params.gelu_activation))
             self.layer_norm2.append(nn.LayerNorm(self.dim, eps=1e-12))
 
@@ -312,7 +318,7 @@ class TransformerModel(nn.Module):
         elif mode == 'predict':
             return self.predict(**kwargs)
         else:
-            raise Exception("Unknown mode: %s" % mode)
+            raise Exception(f"Unknown mode: {mode}")
 
     def fwd(self, x, lengths, causal, src_enc=None, src_len=None, positions=None, langs=None, cache=None, enc_mask=None):
         """
@@ -495,7 +501,7 @@ class TransformerModel(nn.Module):
             generated[cur_len] = next_words * unfinished_sents + self.pad_index * (1 - unfinished_sents)
             gen_len.add_(unfinished_sents)
             unfinished_sents.mul_(next_words.ne(self.eos_index).long())
-            cur_len = cur_len + 1
+            cur_len += 1
 
             # stop when there is a </s> in each sentence, or if we exceed the maximul length
             if unfinished_sents.max() == 0:
@@ -629,8 +635,8 @@ class TransformerModel(nn.Module):
                         break
 
                 # update next beam content
-                assert len(next_sent_beam) == 0 if cur_len + 1 == max_len else beam_size
-                if len(next_sent_beam) == 0:
+                assert not next_sent_beam if cur_len + 1 == max_len else beam_size
+                if not next_sent_beam:
                     next_sent_beam = [(0, self.pad_index, 0)] * beam_size  # pad the batch
                 next_batch_beam.extend(next_sent_beam)
                 assert len(next_batch_beam) == beam_size * (sent_id + 1)
@@ -644,12 +650,12 @@ class TransformerModel(nn.Module):
             # re-order batch and internal states
             generated = generated[:, beam_idx]
             generated[cur_len] = beam_words
-            for k in cache.keys():
+            for k in cache:
                 if k != 'slen':
                     cache[k] = (cache[k][0][beam_idx], cache[k][1][beam_idx])
 
             # update current length
-            cur_len = cur_len + 1
+            cur_len += 1
 
             # stop when we are done with each sentence
             if all(done):

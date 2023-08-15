@@ -70,15 +70,15 @@ def generate_beam(decoders, src_encodeds, src_len, tgt_lang_id, beam_size, lengt
 
     bs = len(src_len)
     n_words = params.n_words
-    
+
     src_len = src_len.unsqueeze(1).expand(bs, beam_size).contiguous().view(-1)
     for i in range(len(src_encodeds)):
         src_encodeds[i] = src_encodeds[i].unsqueeze(1).expand((bs, beam_size) + src_encodeds[i].shape[1:]).contiguous().view((bs * beam_size,) + src_encodeds[i].shape[1:])
-        
+
     generated = src_len.new(max_len, bs * beam_size)
     generated.fill_(params.pad_index)
     generated[0].fill_(params.eos_index) 
-    
+
     generated_hyps = [BeamHypotheses(beam_size, max_len, length_penalty, early_stopping) for _ in range(bs)]
 
     positions = src_len.new(max_len).long()
@@ -88,9 +88,9 @@ def generate_beam(decoders, src_encodeds, src_len, tgt_lang_id, beam_size, lengt
     beam_scores = src_encodeds[0].new(bs, beam_size).fill_(0)
     beam_scores[:, 1:] = -1e9
     beam_scores = beam_scores.view(-1)
-    
+
     cur_len = 1
-    caches = [{'slen': 0} for i in range(len(decoders))]
+    caches = [{'slen': 0} for _ in range(len(decoders))]
     done = [False for _ in range(bs)]
 
     while cur_len < max_len:
@@ -112,16 +112,16 @@ def generate_beam(decoders, src_encodeds, src_len, tgt_lang_id, beam_size, lengt
             tensor = tensor.data[-1, :, :]               # (bs * beam_size, dim)
             scores = decoder.pred_layer.get_scores(tensor)  # (bs * beam_size, n_words)
             scores = F.log_softmax(scores, dim=-1)       # (bs * beam_size, n_words)
-            
+
             avg_scores.append(scores)
-        
+
         avg_scores = torch.logsumexp(torch.stack(avg_scores, dim=0), dim=0) - math.log(len(decoders))
         #avg_scores.div_(len(decoders))
         _scores = avg_scores + beam_scores[:, None].expand_as(avg_scores)
         _scores = _scores.view(bs, beam_size * n_words)
         next_scores, next_words = torch.topk(_scores, 2 * beam_size, dim=1, largest=True, sorted=True)
         assert next_scores.size() == next_words.size() == (bs, 2 * beam_size)
-        
+
         next_batch_beam = []
 
         for sent_id in range(bs):
@@ -153,8 +153,8 @@ def generate_beam(decoders, src_encodeds, src_len, tgt_lang_id, beam_size, lengt
                     break
 
             # update next beam content
-            assert len(next_sent_beam) == 0 if cur_len + 1 == max_len else beam_size
-            if len(next_sent_beam) == 0:
+            assert not next_sent_beam if cur_len + 1 == max_len else beam_size
+            if not next_sent_beam:
                 next_sent_beam = [(0, params.pad_index, 0)] * beam_size  # pad the batch
             next_batch_beam.extend(next_sent_beam)
             assert len(next_batch_beam) == beam_size * (sent_id + 1)
@@ -174,7 +174,7 @@ def generate_beam(decoders, src_encodeds, src_len, tgt_lang_id, beam_size, lengt
                     cache[k] = (cache[k][0][beam_idx], cache[k][1][beam_idx])
 
         # update current length
-        cur_len = cur_len + 1
+        cur_len += 1
 
         # stop when we are done with each sentence
         if all(done):
@@ -213,7 +213,7 @@ def main(params):
     for model_path in models_path:
         models_reloaded.append(torch.load(model_path))
     model_params = AttrDict(models_reloaded[0]['params'])
-    logger.info("Supported languages: %s" % ", ".join(model_params.lang2id.keys()))
+    logger.info(f'Supported languages: {", ".join(model_params.lang2id.keys())}')
 
     # update dictionary parameters
     for name in ['n_words', 'bos_index', 'eos_index', 'pad_index', 'unk_index', 'mask_index']:
@@ -250,7 +250,7 @@ def main(params):
 
         encoders.append(encoder)
         decoders.append(decoder)
-    
+
     #src_sent = ['Poly@@ gam@@ ie statt Demokratie .']
     src_sent = []
     for line in sys.stdin.readlines():
@@ -281,7 +281,7 @@ def main(params):
             encodeds.append(encoded)
 
             assert encoded.size(0) == lengths.size(0)
-            
+
         decoded, dec_lengths = generate_beam(decoders, encodeds, lengths.cuda(), params.tgt_id, 
                       beam_size=params.beam,
                       length_penalty=params.length_penalty,

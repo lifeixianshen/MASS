@@ -80,19 +80,71 @@ class Trainer(object):
         self.n_total_iter = 0
         self.n_sentences = 0
         self.stats = OrderedDict(
-            [('processed_s', 0), ('processed_w', 0)] +
-            [('CLM-%s' % l, []) for l in params.langs] +
-            [('CLM-%s-%s' % (l1, l2), []) for l1, l2 in data['para'].keys()] +
-            [('CLM-%s-%s' % (l2, l1), []) for l1, l2 in data['para'].keys()] +
-            [('MLM-%s' % l, []) for l in params.langs] +
-            [('MLM-%s-%s' % (l1, l2), []) for l1, l2 in data['para'].keys()] +
-            [('MLM-%s-%s' % (l2, l1), []) for l1, l2 in data['para'].keys()] +
-            [('PC-%s-%s' % (l1, l2), []) for l1, l2 in params.pc_steps] +
-            [('AE-%s' % lang, []) for lang in params.ae_steps] +
-            [('MT-%s-%s' % (l1, l2), []) for l1, l2 in params.mt_steps] +
-            [('BMT-%s-%s' % (l1, l2), []) for l1, l2 in params.bmt_steps] +
-            [('MA-%s' % lang, []) for lang in params.mass_steps] +
-            [('BT-%s-%s-%s' % (l1, l2, l3), []) for l1, l2, l3 in params.bt_steps]
+            (
+                (
+                    (
+                        (
+                            (
+                                (
+                                    (
+                                        (
+                                            (
+                                                (
+                                                    (
+                                                        (
+                                                            [
+                                                                ('processed_s', 0),
+                                                                ('processed_w', 0),
+                                                            ]
+                                                            + [
+                                                                (f'CLM-{l}', [])
+                                                                for l in params.langs
+                                                            ]
+                                                        )
+                                                        + [
+                                                            (f'CLM-{l1}-{l2}', [])
+                                                            for l1, l2 in data[
+                                                                'para'
+                                                            ].keys()
+                                                        ]
+                                                    )
+                                                    + [
+                                                        (f'CLM-{l2}-{l1}', [])
+                                                        for l1, l2 in data[
+                                                            'para'
+                                                        ].keys()
+                                                    ]
+                                                )
+                                                + [
+                                                    (f'MLM-{l}', [])
+                                                    for l in params.langs
+                                                ]
+                                            )
+                                            + [
+                                                (f'MLM-{l1}-{l2}', [])
+                                                for l1, l2 in data['para'].keys()
+                                            ]
+                                        )
+                                        + [
+                                            (f'MLM-{l2}-{l1}', [])
+                                            for l1, l2 in data['para'].keys()
+                                        ]
+                                    )
+                                    + [
+                                        (f'PC-{l1}-{l2}', [])
+                                        for l1, l2 in params.pc_steps
+                                    ]
+                                )
+                                + [(f'AE-{lang}', []) for lang in params.ae_steps]
+                            )
+                            + [(f'MT-{l1}-{l2}', []) for l1, l2 in params.mt_steps]
+                        )
+                        + [(f'BMT-{l1}-{l2}', []) for l1, l2 in params.bmt_steps]
+                    )
+                    + [(f'MA-{lang}', []) for lang in params.mass_steps]
+                )
+                + [(f'BT-{l1}-{l2}-{l3}', []) for l1, l2, l3 in params.bt_steps]
+            )
         )
         self.last_time = time.time()
 
@@ -194,7 +246,9 @@ class Trainer(object):
         """
         Create a new iterator for a dataset.
         """
-        logger.info("Creating new training data iterator (%s) ..." % ','.join([str(x) for x in [iter_name, lang1, lang2] if x is not None]))
+        logger.info(
+            f"Creating new training data iterator ({','.join([str(x) for x in [iter_name, lang1, lang2] if x is not None])}) ..."
+        )
         if lang2 is None:
             if stream:
                 iterator = self.data['mono_stream'][lang1]['train'].get_iterator(shuffle=True)
@@ -218,7 +272,9 @@ class Trainer(object):
                 group_by_size=self.params.group_by_size,
                 n_sentences=-1,
             )
-        logger.info("iterator (%s) done" % ','.join([str(x) for x in [iter_name, lang1, lang2] if x is not None]))
+        logger.info(
+            f"iterator ({','.join([str(x) for x in [iter_name, lang1, lang2] if x is not None])}) done"
+        )
 
         self.iterators[(iter_name, lang1, lang2)] = iterator
         return iterator
@@ -408,19 +464,18 @@ class Trainer(object):
         """
         Save the model.
         """
-        path = os.path.join(self.params.dump_path, '%s.pth' % name)
-        logger.info('Saving models to %s ...' % path)
-        data = {}
-        for name in self.MODEL_NAMES:
-            if self.params.multi_gpu:
-                data[name] = getattr(self, name).module.state_dict()
-            else:
-                data[name] = getattr(self, name).state_dict()
-
+        path = os.path.join(self.params.dump_path, f'{name}.pth')
+        logger.info(f'Saving models to {path} ...')
+        data = {
+            name: getattr(self, name).module.state_dict()
+            if self.params.multi_gpu
+            else getattr(self, name).state_dict()
+            for name in self.MODEL_NAMES
+        }
         data['dico_id2word'] = self.data['dico'].id2word
         data['dico_word2id'] = self.data['dico'].word2id
         data['dico_counts'] = self.data['dico'].counts
-        data['params'] = {k: v for k, v in self.params.__dict__.items()}
+        data['params'] = dict(self.params.__dict__.items())
 
         torch.save(data, path)
 
@@ -440,15 +495,15 @@ class Trainer(object):
 
         for name in self.MODEL_NAMES:
             data[name] = getattr(self, name).state_dict()
-            data[name + '_optimizer'] = self.optimizers[name].state_dict()
+            data[f'{name}_optimizer'] = self.optimizers[name].state_dict()
 
         data['dico_id2word'] = self.data['dico'].id2word
         data['dico_word2id'] = self.data['dico'].word2id
         data['dico_counts'] = self.data['dico'].counts
-        data['params'] = {k: v for k, v in self.params.__dict__.items()}
+        data['params'] = dict(self.params.__dict__.items())
 
         checkpoint_path = os.path.join(self.params.dump_path, 'checkpoint.pth')
-        logger.info("Saving checkpoint to %s ..." % checkpoint_path)
+        logger.info(f"Saving checkpoint to {checkpoint_path} ...")
         torch.save(data, checkpoint_path)
 
     def reload_checkpoint(self):
@@ -458,13 +513,13 @@ class Trainer(object):
         checkpoint_path = os.path.join(self.params.dump_path, 'checkpoint.pth')
         if not os.path.isfile(checkpoint_path):
             return
-        logger.warning('Reloading checkpoint from %s ...' % checkpoint_path)
+        logger.warning(f'Reloading checkpoint from {checkpoint_path} ...')
         data = torch.load(checkpoint_path, map_location=lambda storage, loc: storage.cuda(self.params.local_rank))
 
         # reload model parameters and optimizers
         for name in self.MODEL_NAMES:
             getattr(self, name).load_state_dict(data[name])
-            self.optimizers[name].load_state_dict(data[name + '_optimizer'])
+            self.optimizers[name].load_state_dict(data[f'{name}_optimizer'])
 
         # reload main metrics
         self.epoch = data['epoch'] + 1
@@ -496,7 +551,7 @@ class Trainer(object):
             if factor * scores[metric] > factor * self.best_metrics[metric]:
                 self.best_metrics[metric] = scores[metric]
                 logger.info('New best score for %s: %.6f' % (metric, scores[metric]))
-                self.save_model('best-%s' % metric)
+                self.save_model(f'best-{metric}')
 
     def end_epoch(self, scores):
         """
@@ -593,7 +648,9 @@ class Trainer(object):
         # forward / loss
         tensor = model('fwd', x=x, lengths=lengths, langs=langs, causal=True)
         _, loss = model('predict', tensor=tensor, pred_mask=pred_mask, y=y, get_scores=False)
-        self.stats[('CLM-%s' % lang1) if lang2 is None else ('CLM-%s-%s' % (lang1, lang2))].append(loss.item())
+        self.stats[
+            f'CLM-{lang1}' if lang2 is None else f'CLM-{lang1}-{lang2}'
+        ].append(loss.item())
         loss = lambda_coeff * loss
 
         # optimize
@@ -628,7 +685,9 @@ class Trainer(object):
         # forward / loss
         tensor = model('fwd', x=x, lengths=lengths, positions=positions, langs=langs, causal=False)
         _, loss = model('predict', tensor=tensor, pred_mask=pred_mask, y=y, get_scores=False)
-        self.stats[('MLM-%s' % lang1) if lang2 is None else ('MLM-%s-%s' % (lang1, lang2))].append(loss.item())
+        self.stats[
+            f'MLM-{lang1}' if lang2 is None else f'MLM-{lang1}-{lang2}'
+        ].append(loss.item())
         loss = lambda_coeff * loss
 
         # optimize
@@ -683,7 +742,7 @@ class Trainer(object):
         emb = (model.module if params.multi_gpu else model).embeddings.weight
         pred = F.linear(h, emb[CLF_ID1].unsqueeze(0), emb[CLF_ID2, 0])
         loss = F.binary_cross_entropy_with_logits(pred.view(-1), y.to(pred.device).type_as(pred))
-        self.stats['PC-%s-%s' % (lang1, lang2)].append(loss.item())
+        self.stats[f'PC-{lang1}-{lang2}'].append(loss.item())
         loss = lambda_coeff * loss
 
         # optimize
@@ -739,8 +798,11 @@ class EncDecTrainer(Trainer):
 
         probs = torch.multinomial(self.params.pred_probs, len(_w_real), replacement=True)
 
-        _w = _w_mask * (probs == 0).numpy() + _w_real * (probs == 1).numpy() + _w_rand * (probs == 2).numpy()
-        return _w
+        return (
+            _w_mask * (probs == 0).numpy()
+            + _w_real * (probs == 1).numpy()
+            + _w_rand * (probs == 2).numpy()
+        )
 
     def unfold_segments(self, segs):
         """Unfold the random mask segments, for example:
@@ -778,9 +840,9 @@ class EncDecTrainer(Trainer):
             shuf_segs = segs + unmasked_tokens
 
         random.shuffle(shuf_segs)
-        
+
         if p >= 0.8:
-            shuf_segs = segs[0:1] + shuf_segs
+            shuf_segs = segs[:1] + shuf_segs
         elif p >= 0.6:
             shuf_segs = shuf_segs + segs[-1:]
         return shuf_segs
@@ -806,11 +868,11 @@ class EncDecTrainer(Trainer):
         max_len = 0
         positions, inputs, targets, outputs, = [], [], [], []
         mask_len = round(len(x[:, 0]) * self.params.word_mass)
-        len2 = [mask_len for i in range(l.size(0))]
-        
-        unmasked_tokens = [0 for i in range(l[0] - mask_len - 1)]
+        len2 = [mask_len for _ in range(l.size(0))]
+
+        unmasked_tokens = [0 for _ in range(l[0] - mask_len - 1)]
         segs = self.get_segments(mask_len, span_len)
-        
+
         for i in range(l.size(0)):
             words = np.array(x[:l[i], i].tolist())
             shuf_segs = self.shuffle_segments(segs, unmasked_tokens)
@@ -883,7 +945,9 @@ class EncDecTrainer(Trainer):
 
         # loss
         _, loss = self.decoder('predict', tensor=dec2, pred_mask=pred_mask, y=y, get_scores=False)
-        self.stats[('AE-%s' % lang1) if lang1 == lang2 else ('MT-%s-%s' % (lang1, lang2))].append(loss.item())
+        self.stats[
+            f'AE-{lang1}' if lang1 == lang2 else f'MT-{lang1}-{lang2}'
+        ].append(loss.item())
         loss = lambda_coeff * loss
 
         # optimize
@@ -950,7 +1014,7 @@ class EncDecTrainer(Trainer):
 
         # loss
         _, loss = self.decoder('predict', tensor=dec3, pred_mask=pred_mask, y=y1, get_scores=False)
-        self.stats[('BT-%s-%s-%s' % (lang1, lang2, lang3))].append(loss.item())
+        self.stats[f'BT-{lang1}-{lang2}-{lang3}'].append(loss.item())
 
         # optimize
         self.optimize(loss, ['encoder', 'decoder'])
@@ -976,22 +1040,22 @@ class EncDecTrainer(Trainer):
 
         langs1 = x1.clone().fill_(lang1_id)
         langs2 = x2.clone().fill_(lang2_id)
-        
+
         x1, len1, langs1, x2, len2, langs2, y, positions = to_cuda(x1, len1, langs1, x2, len2, langs2, y, positions)
 
         enc1 = self.encoder('fwd', x=x1, lengths=len1, langs=langs1, causal=False)
         enc1 = enc1.transpose(0, 1)
-        
+
         enc_mask = x1.ne(params.mask_index)
         enc_mask = enc_mask.transpose(0, 1)
-        
+
         dec2 = self.decoder('fwd', 
                             x=x2, lengths=len2, langs=langs2, causal=True, 
                             src_enc=enc1, src_len=len1, positions=positions, enc_mask=enc_mask)
-        
+
         _, loss = self.decoder('predict', tensor=dec2, pred_mask=pred_mask, y=y, get_scores=False)
-        self.stats[('MA-%s' % lang)].append(loss.item())
-        
+        self.stats[f'MA-{lang}'].append(loss.item())
+
         self.optimize(loss, ['encoder', 'decoder'])
 
         # number of processed sentences / words
@@ -1037,7 +1101,7 @@ class EncDecTrainer(Trainer):
 
         # loss
         _, loss = self.decoder('predict', tensor=dec2, pred_mask=pred_mask, y=y, get_scores=False)
-        self.stats[('BMT-%s-%s' % (lang1, lang2))].append(loss.item())
+        self.stats[f'BMT-{lang1}-{lang2}'].append(loss.item())
         loss = lambda_coeff * loss
 
         # optimize

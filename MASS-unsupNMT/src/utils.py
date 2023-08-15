@@ -24,7 +24,7 @@ from .logger import create_logger
 FALSY_STRINGS = {'off', 'false', '0'}
 TRUTHY_STRINGS = {'on', 'true', '1'}
 
-DUMP_PATH = '/checkpoint/%s/dumped' % getpass.getuser()
+DUMP_PATH = f'/checkpoint/{getpass.getuser()}/dumped'
 DYNAMIC_COEFF = ['lambda_clm', 'lambda_mlm', 'lambda_pc', 'lambda_ae', 'lambda_mt', 'lambda_bt', 'lambda_mass', 'lambda_bmt', 'lambda_span']
 
 
@@ -65,11 +65,11 @@ def initialize_exp(params):
         else:
             assert "'" not in x
             if re.match('^[a-zA-Z0-9_]+$', x):
-                command.append("%s" % x)
+                command.append(f"{x}")
             else:
-                command.append("'%s'" % x)
+                command.append(f"'{x}'")
     command = ' '.join(command)
-    params.command = command + ' --exp_id "%s"' % params.exp_id
+    params.command = f'{command} --exp_id "{params.exp_id}"'
 
     # check experiment name
     assert len(params.exp_name.strip()) > 0
@@ -77,10 +77,13 @@ def initialize_exp(params):
     # create a logger
     logger = create_logger(os.path.join(params.dump_path, 'train.log'), rank=getattr(params, 'global_rank', 0))
     logger.info("============ Initialized logger ============")
-    logger.info("\n".join("%s: %s" % (k, str(v))
-                          for k, v in sorted(dict(vars(params)).items())))
+    logger.info(
+        "\n".join(
+            f"{k}: {str(v)}" for k, v in sorted(dict(vars(params)).items())
+        )
+    )
     logger.info("The experiment will be stored in %s\n" % params.dump_path)
-    logger.info("Running command: %s" % command)
+    logger.info(f"Running command: {command}")
     logger.info("")
     return logger
 
@@ -95,7 +98,7 @@ def get_dump_path(params):
     # create the sweep path if it does not exist
     sweep_path = os.path.join(dump_path, params.exp_name)
     if not os.path.exists(sweep_path):
-        subprocess.Popen("mkdir -p %s" % sweep_path, shell=True).wait()
+        subprocess.Popen(f"mkdir -p {sweep_path}", shell=True).wait()
 
     # create an ID for the job if it is not given in the parameters.
     # if we run on the cluster, the job ID is the one of Chronos.
@@ -118,7 +121,7 @@ def get_dump_path(params):
     # create the dump folder / update parameters
     params.dump_path = os.path.join(sweep_path, params.exp_id)
     if not os.path.isdir(params.dump_path):
-        subprocess.Popen("mkdir -p %s" % params.dump_path, shell=True).wait()
+        subprocess.Popen(f"mkdir -p {params.dump_path}", shell=True).wait()
 
 
 class AdamInverseSqrtWithWarmup(optim.Adam):
@@ -176,9 +179,9 @@ def get_optimizer(parameters, s):
         - "sgd,lr=0.01"
         - "adagrad,lr=0.1,lr_decay=0.05"
     """
+    optim_params = {}
     if "," in s:
         method = s[:s.find(',')]
-        optim_params = {}
         for x in s[s.find(',') + 1:].split(','):
             split = x.split('=')
             assert len(split) == 2
@@ -186,8 +189,6 @@ def get_optimizer(parameters, s):
             optim_params[split[0]] = float(split[1])
     else:
         method = s
-        optim_params = {}
-
     if method == 'adadelta':
         optim_fn = optim.Adadelta
     elif method == 'adagrad':
@@ -214,14 +215,15 @@ def get_optimizer(parameters, s):
         optim_fn = optim.SGD
         assert 'lr' in optim_params
     else:
-        raise Exception('Unknown optimization method: "%s"' % method)
+        raise Exception(f'Unknown optimization method: "{method}"')
 
     # check that we give good parameters to the optimizer
     expected_args = inspect.getargspec(optim_fn.__init__)[0]
     assert expected_args[:2] == ['self', 'params']
-    if not all(k in expected_args[2:] for k in optim_params.keys()):
-        raise Exception('Unexpected parameters: expected "%s", got "%s"' % (
-            str(expected_args[2:]), str(optim_params.keys())))
+    if any(k not in expected_args[2:] for k in optim_params):
+        raise Exception(
+            f'Unexpected parameters: expected "{str(expected_args[2:])}", got "{str(optim_params.keys())}"'
+        )
 
     return optim_fn(parameters, **optim_params)
 
@@ -238,8 +240,7 @@ def restore_segmentation(path):
     Take a file segmented with BPE and restore it to its original segmentation.
     """
     assert os.path.isfile(path)
-    restore_cmd = "sed -i -r 's/(@@ )|(@@ ?$)//g' %s"
-    subprocess.Popen(restore_cmd % path, shell=True).wait()
+    subprocess.Popen(f"sed -i -r 's/(@@ )|(@@ ?$)//g' {path}", shell=True).wait()
 
 
 def parse_lambda_config(params):
@@ -254,14 +255,14 @@ def parse_lambda_config(params):
         split = x.split(',')
         if len(split) == 1:
             setattr(params, name, float(x))
-            setattr(params, name + '_config', None)
+            setattr(params, f'{name}_config', None)
         else:
             split = [s.split(':') for s in split]
             assert all(len(s) == 2 for s in split)
             assert all(k.isdigit() for k, _ in split)
             assert all(int(split[i][0]) < int(split[i + 1][0]) for i in range(len(split) - 1))
             setattr(params, name, float(split[0][1]))
-            setattr(params, name + '_config', [(int(k), float(v)) for k, v in split])
+            setattr(params, f'{name}_config', [(int(k), float(v)) for k, v in split])
 
 
 def get_lambda_value(config, n_iter):
@@ -269,7 +270,7 @@ def get_lambda_value(config, n_iter):
     Compute a lambda value according to its schedule configuration.
     """
     ranges = [i for i in range(len(config) - 1) if config[i][0] <= n_iter < config[i + 1][0]]
-    if len(ranges) == 0:
+    if not ranges:
         assert n_iter >= config[-1][0]
         return config[-1][1]
     assert len(ranges) == 1
@@ -284,7 +285,7 @@ def update_lambdas(params, n_iter):
     Update all lambda coefficients.
     """
     for name in DYNAMIC_COEFF:
-        config = getattr(params, name + '_config')
+        config = getattr(params, f'{name}_config')
         if config is not None:
             setattr(params, name, get_lambda_value(config, n_iter))
 
@@ -300,7 +301,7 @@ def set_sampling_probs(data, params):
 
     # monolingual data
     params.mono_list = [k for k, v in data['mono_stream'].items() if 'train' in v]
-    if len(params.mono_list) > 0:
+    if params.mono_list:
         probs = np.array([1.0 * len(data['mono_stream'][lang]['train']) for lang in params.mono_list])
         probs /= probs.sum()
         probs = np.array([p ** coeff for p in probs])
@@ -309,7 +310,7 @@ def set_sampling_probs(data, params):
 
     # parallel data
     params.para_list = [k for k, v in data['para'].items() if 'train' in v]
-    if len(params.para_list) > 0:
+    if params.para_list:
         probs = np.array([1.0 * len(data['para'][(l1, l2)]['train']) for (l1, l2) in params.para_list])
         probs /= probs.sum()
         probs = np.array([p ** coeff for p in probs])
@@ -382,8 +383,26 @@ def shuf_order(langs, params=None, n=5):
         p_mono = p_mono / p_mono.sum()
         p_para = p_para / p_para.sum()
 
-    s_mono = [mono[i] for i in np.random.choice(len(mono), size=min(n, len(mono)), p=p_mono, replace=True)] if len(mono) > 0 else []
-    s_para = [para[i] for i in np.random.choice(len(para), size=min(n, len(para)), p=p_para, replace=True)] if len(para) > 0 else []
+    s_mono = (
+        [
+            mono[i]
+            for i in np.random.choice(
+                len(mono), size=min(n, len(mono)), p=p_mono, replace=True
+            )
+        ]
+        if mono
+        else []
+    )
+    s_para = (
+        [
+            para[i]
+            for i in np.random.choice(
+                len(para), size=min(n, len(para)), p=p_para, replace=True
+            )
+        ]
+        if para
+        else []
+    )
 
     assert len(s_mono) + len(s_para) > 0
     return [(lang, None) for lang in s_mono] + s_para

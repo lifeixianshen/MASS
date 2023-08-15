@@ -271,7 +271,7 @@ def main(params):
         scores = evaluator.run_all_evals(trainer)
         for k, v in scores.items():
             logger.info("%s -> %.6f" % (k, v))
-        logger.info("__log__:%s" % json.dumps(scores))
+        logger.info(f"__log__:{json.dumps(scores)}")
         exit()
 
     # set sampling probabilities for training
@@ -313,7 +313,7 @@ def main(params):
             # back-translation steps
             for lang1, lang2, lang3 in shuf_order(params.bt_steps):
                 trainer.bt_step(lang1, lang2, lang3, params.lambda_bt)
-            
+
             # back-parallel steps
             for lang1, lang2 in shuf_order(params.bmt_steps, params):
                 trainer.bmt_step(lang1, lang2, params.lambda_bmt)
@@ -329,7 +329,7 @@ def main(params):
         for k, v in scores.items():
             logger.info("%s -> %.6f" % (k, v))
         if params.is_master:
-            logger.info("__log__:%s" % json.dumps(scores))
+            logger.info(f"__log__:{json.dumps(scores)}")
 
         # end of epoch
         trainer.save_best_model(scores)

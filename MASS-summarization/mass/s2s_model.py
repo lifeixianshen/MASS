@@ -159,8 +159,7 @@ class TransformerMASSModel(FairseqEncoderDecoderModel):
                 - a dictionary with any model-specific outputs
         """
         encoder_out = self.encoder(src_tokens, src_lengths=src_lengths, **kwargs)
-        decoder_out = self.decoder(prev_output_tokens, encoder_out=encoder_out, **kwargs)
-        return decoder_out
+        return self.decoder(prev_output_tokens, encoder_out=encoder_out, **kwargs)
 
 
 class TransformerEncoderLayer(nn.Module):
@@ -387,18 +386,20 @@ class TransformerEncoder(FairseqEncoder):
 
         self.layers = nn.ModuleList([])
 
-        self.layers.extend([
-            TransformerEncoderLayer(
-                args.encoder_embed_dim,
-                args.encoder_ffn_embed_dim,
-                args.encoder_attention_heads,
-                args.dropout,
-                args.attention_dropout,
-                args.activation_dropout,
-                args.activation_fn,
-            )
-            for i in range(args.encoder_layers)
-        ])
+        self.layers.extend(
+            [
+                TransformerEncoderLayer(
+                    args.encoder_embed_dim,
+                    args.encoder_ffn_embed_dim,
+                    args.encoder_attention_heads,
+                    args.dropout,
+                    args.attention_dropout,
+                    args.activation_dropout,
+                    args.activation_fn,
+                )
+                for _ in range(args.encoder_layers)
+            ]
+        )
 
         self.emb_layer_norm = LayerNorm(embed_dim)
 

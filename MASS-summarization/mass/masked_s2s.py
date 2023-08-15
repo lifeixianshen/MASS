@@ -75,9 +75,9 @@ class MaskedS2STask(FairseqTask):
             args.dataset_impl = 'lazy'
 
         paths = args.data.split(':')
-        
+
         dictionary = cls.load_dictionary(os.path.join(paths[0], 'dict.txt'))
-        print('| dictionary: {} types'.format(len(dictionary)))
+        print(f'| dictionary: {len(dictionary)} types')
         return cls(args, dictionary)
 
     @classmethod
@@ -100,8 +100,7 @@ class MaskedS2STask(FairseqTask):
 
     def build_model(self, args):
         from fairseq import models
-        model = models.build_model(args, self)
-        return model
+        return models.build_model(args, self)
 
     def load_dataset(self, split, epoch=0, combine=False, **kwargs):
         """Load a given dataset split.
@@ -121,8 +120,8 @@ class MaskedS2STask(FairseqTask):
             combine=combine,
         )
         if dataset is None:
-            raise FileNotFoundError('Dataset not found: {} ({})'.format(split, split_path))
-        
+            raise FileNotFoundError(f'Dataset not found: {split} ({split_path})')
+
         self.datasets[split] = self.build_s2s_dataset(dataset)
 
     def build_s2s_dataset(self, dataset):
@@ -134,15 +133,17 @@ class MaskedS2STask(FairseqTask):
             eos=self.source_dictionary.eos(),
             break_mode=self.args.sample_break_mode,
         )
-        
+
         pred_probs = torch.FloatTensor([float(x) for x in self.args.mask_s2s_mask_keep_rand.split(',')])
 
-        s2s_dataset = MaskedLanguagePairDataset(
-            dataset, dataset.sizes, self.source_dictionary,
-            shuffle=True, mask_prob=self.args.mask_s2s_prob,
+        return MaskedLanguagePairDataset(
+            dataset,
+            dataset.sizes,
+            self.source_dictionary,
+            shuffle=True,
+            mask_prob=self.args.mask_s2s_prob,
             pred_probs=pred_probs,
         )
-        return s2s_dataset
 
     def build_dataset_for_inference(self, src_tokens, src_lengths):
         raise NotImplementedError
